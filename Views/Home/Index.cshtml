@@ -1,0 +1,116 @@
+﻿@{
+    ViewData["Title"] = "Notes";
+}
+
+<!-- <div class="text-center"> -->
+    <div>
+    <!-- <h1 class="display-4">Welcome</h1>  
+    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p> -->
+    <input type="hidden" id="node" value="@(ViewBag.node)" />
+    <textarea style="width: 100vw !important;height: 88vh !important;padding-left: 0.5vw; margin:0; border:0;" id="textHolder">@(ViewBag.TextHolderContent)</textarea>
+
+    <!-- <button id="sendButton">Send</button> -->
+</div>
+
+<script>
+
+    function sendTextAjaxMode(){
+        $.post( "Home/textReceiver", { content: $("#textHolder").val() })
+        .done(function( data ) {
+            if(data != undefined && data.result == "ok"){
+                $("#status").text("Data Sent: " + new Date($.now()));
+            }
+        });
+    }
+
+
+</script>
+<script src="~/lib/signalr.js"></script>
+
+<script>
+    var lastSentText = '';
+    var sendingContent = false;
+
+    var delay = (function () {
+        var timer = 0;
+        return function (callback, ms) {
+            clearTimeout(timer);
+            timer = setTimeout(callback, ms);
+        };
+    })()
+
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/texthub")
+        .configureLogging(signalR.LogLevel.Trace)
+        .build();
+
+    connection.on("ReceiveMessage", (user, message) => {
+
+        showLoadingIcon();
+
+        if(user == $("#node").val() && message != undefined)
+        {
+            var cursorPosition = document.getElementById('textHolder').selectionStart;
+            var lastLength = $("#textHolder").val().length;
+            
+            $("#textHolder").attr('readonly','readonly');
+            $("#textHolder").val(message);
+
+            //set the last cursor position if the length is the same or higher;
+            if(message.length >= lastLength)
+            {
+                document.getElementById('textHolder').selectionStart = cursorPosition;
+                document.getElementById('textHolder').selectionEnd = cursorPosition;
+            }
+
+            $("#textHolder").removeAttr('readonly');
+
+            lastSentText = message;
+        }
+
+        hideLoadingIcon();
+    });
+
+    connection.start().catch(err => console.error(err.toString()));
+
+  /*  document.getElementById("textHolder").addEventListener("keyup", event => { 
+        if(sendingContent == false)
+        {       
+            sendingContent = true;
+            //event.preventDefault();
+            setTimeout(processContent, 3000);
+        }
+    });*/
+
+   document.getElementById("textHolder").addEventListener("keydown", event => {
+        delay(function () {            
+            //console.log('this will hit, once user has not typed for 1 second');            
+            processContent();
+        }, 3000);
+    });     
+
+    function showLoadingIcon(){
+        document.getElementById('statusConnectionIcon').style.display = 'inline-block';
+    }
+
+    function hideLoadingIcon(){
+        document.getElementById('statusConnectionIcon').style.display = 'none';
+    }
+
+    function processContent(){        
+        const user = $("#node").val();
+        const message = $("#textHolder").val();
+        
+        showLoadingIcon();
+
+        if(lastSentText != message)
+        {
+            connection.invoke("SendMessage", user, message).catch(err => console.error(err.toString()));
+            
+            lastSentText = message;
+        }
+        
+        hideLoadingIcon();
+        sendingContent = false;
+    }
+</script>
